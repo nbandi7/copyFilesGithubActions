@@ -1,0 +1,74 @@
+name: V2 - Copy files from one repo to another
+on: 
+  workflow_dispatch:
+    inputs:
+      user_name:
+        description: 'Name of committer'
+        required: true
+      user_email:
+        description: 'Email of committer'
+        required: true
+      source_file: 
+        description: 'Source file/files here'
+        required: true
+      source_repo:
+        description: 'Source repo'
+        required: true
+      destination_repo: 
+        description: 'Dest repo here'
+        required: true
+      commit_message: 
+        description: 'Commit message here'
+        required: true
+      description_message:
+        description: 'Commit description'
+        required: false
+    
+jobs:
+  code-move:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Movement of code from ${{ github.event.inputs.source_repo }} to ${{ github.event.inputs.destination_repo }}
+        run: |
+          CLONE_DIR=$(mktemp -d)
+          echo $CLONE_DIR
+          git config --global user.email '${{ github.event.inputs.user_name }}'
+          git config --global user.name '${{ github.event.inputs.user_email }}'
+          git clone https://x-access-token:$API_TOKEN_GITHUB@github.com/nbandi7/${{ github.event.inputs.source_repo }}.git $CLONE_DIR/${{ github.event.inputs.source_repo }}
+          git clone https://x-access-token:$API_TOKEN_GITHUB@github.com/nbandi7/${{ github.event.inputs.destination_repo }}.git $CLONE_DIR/${{ github.event.inputs.destination_repo }}
+          files='${{ github.event.inputs.source_file }}'
+          IFS=','
+          read -a strarr <<< "$files"
+          for val in "${strarr[@]}"
+          do
+            directory="$(dirname "$val")"
+            # echo $directory
+            if [ $directory != "." ]
+            then
+              if [ -d "$CLONE_DIR/${{ github.event.inputs.destination_repo }}/$directory" ] 
+              then
+                echo "directory $CLONE_DIR/${{ github.event.inputs.destination_repo }}/$directory already exists"
+              else
+                echo "$directory does not exist"
+                mkdir -p "$CLONE_DIR/${{ github.event.inputs.destination_repo }}/$directory"
+              fi
+            else 
+              echo "$directory not a directory"
+            fi
+          done
+          for val in "${strarr[@]}"
+          do
+            cp -R $CLONE_DIR/${{ github.event.inputs.source_repo }}/$val $CLONE_DIR/${{ github.event.inputs.destination_repo }}/$val 
+          done
+          cd $CLONE_DIR/${{ github.event.inputs.destination_repo }}
+          git status
+          git add .
+          if git status | grep -q "Changes to be committed"
+          then
+            git commit -am '${{ github.event.inputs.commit_message }}' -m '${{ github.event.inputs.description_message }}'
+            git push
+          else
+            echo "No changes detected"
+          fi
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
